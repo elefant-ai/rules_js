@@ -98,7 +98,7 @@ _ATTRS = {
         > This pattern is typically used when the program has conditional behavior
         > that is enabled when the module is found (like a plugin) but the program
         > also runs without the dependency.
-        > 
+        >
         > This is possible because node.js doesn't enforce the dependencies are sound.
         > All files under `node_modules` are available to any program.
         > In contrast, Bazel makes it possible to make builds hermetic, which means that
@@ -210,8 +210,16 @@ def _npm_package_store_impl(ctx):
                 args.add(virtual_store_directory.path)
 
                 bsdtar = ctx.toolchains["@aspect_bazel_lib//lib:tar_toolchain_type"]
+                # Hacky way to detect Windows, but it works
+                # Use system bsdtar to workaround https://github.com/aspect-build/bazel-lib/issues/848
+                # Requires msys2 to be installed.
+                if bsdtar.tarinfo.binary.path[-4:] == ".exe":
+                    bsdtar_path = "bsdtar"
+                else:
+                    bsdtar_path = bsdtar.tarinfo.binary
+
                 ctx.actions.run(
-                    executable = bsdtar.tarinfo.binary,
+                    executable = bsdtar_path,
                     inputs = depset(direct = [src_directory], transitive = [bsdtar.default.files]),
                     outputs = [virtual_store_directory],
                     arguments = [args],
