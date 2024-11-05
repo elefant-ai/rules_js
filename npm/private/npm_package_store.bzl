@@ -223,8 +223,16 @@ def _npm_package_store_impl(ctx):
                 # tar to strip one directory level. Some packages have directory permissions missing
                 # executable which make the directories not listable (pngjs@5.0.0 for example).
                 bsdtar = ctx.toolchains["@aspect_bazel_lib//lib:tar_toolchain_type"]
+                
+                # Hacky way to detect Windows, but it works
+                if bsdtar.tarinfo.binary.path[-4:] == ".exe":
+                    bsdtar_path = "bsdtar"
+                    print("Windows!")
+                else:
+                    bsdtar_path = bsdtar.tarinfo.binary
+
                 ctx.actions.run(
-                    executable = bsdtar.tarinfo.binary,
+                    executable = bsdtar_path,
                     inputs = depset(direct = [src], transitive = [bsdtar.default.files]),
                     outputs = [package_store_directory],
                     arguments = [
