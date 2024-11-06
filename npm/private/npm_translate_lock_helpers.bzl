@@ -283,10 +283,6 @@ def _get_npm_imports(importers, packages, patched_dependencies, only_built_depen
         transitive_closure = package_info.get("transitive_closure")
         resolution = package_info.get("resolution")
 
-        if version.startswith("file:"):
-            # this package is treated as a first-party dep
-            continue
-
         resolution_type = resolution.get("type", None)
         if resolution_type == "directory":
             # this package is treated as a first-party dep
@@ -431,7 +427,9 @@ ERROR: can not apply both `pnpm.patchedDependencies` and `npm_translate_lock(pat
                 else:
                     url = tarball
             elif tarball.startswith("file:"):
-                url = tarball
+                file_path = tarball[5:]
+                file_path = paths.normalize(paths.join(root_package, file_path))
+                url = "file:{}".format(file_path)
             else:
                 if not registry:
                     registry = utils.npm_registry_url(name, registries, default_registry)
@@ -516,7 +514,8 @@ def _is_url(url):
 
 ################################################################################
 def _to_apparent_repo_name(canonical_name):
-    return canonical_name[canonical_name.rfind("~") + 1:]
+    # Bazel 7 uses `~` as the canonical name separator by default, Bazel 8 always uses `+`.
+    return canonical_name[max(canonical_name.rfind("~"), canonical_name.rfind("+")) + 1:]
 
 ################################################################################
 def _verify_node_modules_ignored(rctx, importers, root_package):
@@ -586,6 +585,9 @@ def _verify_lifecycle_hooks_specified(_, state):
         fail("""\
 ERROR: pnpm.onlyBuiltDependencies required in pnpm workspace root package.json when using pnpm v9 or later
 
+The root package.json must be alongside the pnpm-lock.yaml file and contain a pnpm.onlyBuiltDependencies and
+will be automatically detected even if not explicitly added to data attribute.
+
 As of pnpm v9, the lockfile no longer specifies if packages have lifecycle hooks.
 
 Packages that rules_js should generate lifecycle hook actions for must now be declared in
@@ -595,7 +597,7 @@ https://pnpm.io/package_json#pnpmonlybuiltdependencies for more information.
 Prior to pnpm v9, rules_js keyed off of the requiresBuild attribute in the pnpm lock
 file to determine if a lifecycle hook action should be generated for an npm package.
 See [pnpm #7707](https://github.com/pnpm/pnpm/issues/7707) for the reasons that pnpm
-removed the requiredBuild attribute from the lockfile in v9.
+removed the requiresBuild attribute from the lockfile in v9.
 """)
 
 ################################################################################

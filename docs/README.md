@@ -7,13 +7,12 @@ Stuck?
 -   See the [Frequently asked questions](./faq.md)
 -   Ask in `#javascript` on <http://slack.bazel.build>
 -   Check for [known issues](https://github.com/aspect-build/rules_js/issues)
--   Pay for support, provided by <https://aspect.build/services>.
+-   Sign up for commercial support, provided as a Slack Connect channel by <https://aspect.build/services>.
 
 ## Installation
 
-From the release you wish to use:
-<https://github.com/aspect-build/rules_js/releases>
-copy the WORKSPACE snippet into your `WORKSPACE` file.
+Follow instructions in the release you wish to use:
+<https://github.com/aspect-build/rules_js/releases>.
 
 ## Usage
 
@@ -38,16 +37,16 @@ Other recommendations:
 
 ### Node.js
 
-rules_js depends on rules_nodejs version 5.0 or greater.
+rules_js depends on rules_nodejs version 6.1.0 or greater.
 
 Installation is included in the `WORKSPACE` snippet you pasted from the Installation instructions above.
 
 **API docs:**
 
 -   Choosing the version of Node.js:
-    <https://bazelbuild.github.io/rules_nodejs/install.html>
--   Rules API: <https://bazelbuild.github.io/rules_nodejs/Core.html>
--   The Node.js toolchain: <https://bazelbuild.github.io/rules_nodejs/Toolchains.html>
+    <https://bazel-contrib.github.io/rules_nodejs/install.html>
+-   Rules API: <https://bazel-contrib.github.io/rules_nodejs/Core.html>
+-   The Node.js toolchain: <https://bazel-contrib.github.io/rules_nodejs/Toolchains.html>
 
 ### Fetch third-party packages from npm
 
@@ -59,7 +58,7 @@ If your code works with pnpm, then you should expect it works under Bazel as wel
 This means that if your issue can be reproduced outside of Bazel, using a reproduction with only pnpm,
 then we ask that you fix the issue there, and will close such issues filed on rules_js.
 
-Supported pnpm versions are 7-8 (lockfile versions 5.4-6.1) with pnpm 9 (lockfile 9) support in progress (see [1652](https://github.com/aspect-build/rules_js/issues/1652)).
+Supported pnpm versions are 7-9 (lockfile versions 5.4-6.1, 9).
 
 The typical usage is to import an entire `pnpm-lock.yaml` file.
 Create such a file if you don't have one. You could install pnpm on your machine, or use `npx` to run it.
@@ -166,7 +165,7 @@ copied to this location.
 Our custom rules will take care of copying their sources to the `bazel-bin` output folder automatically.
 However this only works when those sources are under the same `BUILD` file as the target that does
 the copying. If you have a source file in another `BUILD` file, you'll need to explicitly copy that
-with a rule like [`copy_to_bin`](https://docs.aspect.build/aspect-build/bazel-lib/v1.0.0/docs/copy_to_bin-docgen.html#copy_to_bin).
+with a rule like [`copy_to_bin`](https://docs.aspect.build/bazel-contrib/bazel-lib/v1.0.0/docs/copy_to_bin-docgen.html#copy_to_bin).
 
 **API docs:**
 
@@ -226,6 +225,10 @@ $ bazel query @npm//... --output=location | grep bzl_library
 ```
 
 This shows locations on disk where the npm packages can be loaded.
+
+> [!NOTE]
+> These queries only work when `generate_bzl_library_targets = True` is passed to `npm_translate_lock`.
+> If you get no results, check the settings in your `MODULE.bazel` or `WORKSPACE` file and try again.
 
 To see the definition of one of these targets, you can run another `bazel query`:
 
@@ -305,6 +308,7 @@ Aspect has written a number of these based on rules_js, such as:
 -   [rules_terser](https://github.com/aspect-build/rules_terser) - Bazel rules for <https://terser.org/> - a JavaScript minifier
 -   [rules_rollup](https://github.com/aspect-build/rules_rollup) - Bazel rules for <https://rollupjs.org/> - a JavaScript bundler
 -   [rules_deno](https://github.com/aspect-build/rules_deno) - Bazel rules for Deno http://deno.land
+-   [rules_lint](https://github.com/aspect-build/rules_lint) includes [eslint support](https://github.com/aspect-build/rules_lint/blob/main/docs/eslint.md).
 
 You can also write your own custom rule, though this is an advanced topic and not covered in this documentation.
 
@@ -363,6 +367,12 @@ Or, you can use it locally within a monorepo using [pnpm workspaces].
 [bazel macros]: https://bazel.build/rules/macros
 [gazelle]: https://github.com/bazelbuild/bazel-gazelle
 [stardoc]: https://github.com/bazelbuild/stardoc
+
+### CI/CD setup
+
+We recommend using [Aspect Workflows](https://docs.aspect.build/workflows) which provides a pool of warm Bazel CI runners
+for your existing CI system. This provides the promised Bazel speed and cost savings, with very little work required from your
+developer infrastructure team!
 
 ### Debugging
 

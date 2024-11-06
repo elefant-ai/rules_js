@@ -182,9 +182,11 @@ def gather_runfiles(
     for target in data:
         transitive_files_depsets.append(target[DefaultInfo].files)
 
+    data_deps = data + deps
+
     # Gather files from JsInfo providers of data & deps
     transitive_files_depsets.append(gather_files_from_js_infos(
-        targets = data + deps,
+        targets = data_deps,
         include_sources = include_sources,
         include_types = include_types,
         include_transitive_sources = include_transitive_sources,
@@ -209,7 +211,7 @@ def gather_runfiles(
         transitive_files = depset(transitive = transitive_files_depsets),
     ).merge_all([
         target[DefaultInfo].default_runfiles
-        for target in data + deps
+        for target in data_deps
     ])
 
 LOG_LEVELS = {
@@ -230,7 +232,7 @@ def envs_for_log_level(log_level):
         A list of environment variables to set to turn on the js_binary runtime
         logs for the given log level. Typically, they are each set to "1".
     """
-    if log_level not in LOG_LEVELS.keys():
+    if LOG_LEVELS.get(log_level, 0) == 0:
         msg = "log_level must be one of {} but got {}".format(LOG_LEVELS.keys(), log_level)
         fail(msg)
     envs = []
