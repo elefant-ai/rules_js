@@ -239,8 +239,15 @@ def _npm_package_store_impl(ctx):
                         tar_exclude_package_contents.append("--exclude")
                         tar_exclude_package_contents.append(pattern)
 
+                # Hacky way to detect Windows, but it works
+                if bsdtar.tarinfo.binary.path[-4:] == ".exe":
+                    bsdtar_path = "bsdtar"
+                    print("Windows!")
+                else:
+                    bsdtar_path = bsdtar.tarinfo.binary
+
                 ctx.actions.run(
-                    executable = bsdtar.tarinfo.binary,
+                    executable = bsdtar_path,
                     inputs = depset(direct = [src], transitive = [bsdtar.default.files]),
                     outputs = [package_store_directory],
                     arguments = [
