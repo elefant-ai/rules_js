@@ -28,6 +28,7 @@ Advanced users may want to directly fetch a package from npm rather than start f
 load("@aspect_bazel_lib//lib:utils.bzl", bazel_lib_utils = "utils")
 load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_file")
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load(":exclude_package_contents_default.bzl", "exclude_package_contents_default")
 load(":list_sources.bzl", "list_sources")
 load(":npm_translate_lock_generate.bzl", "generate_repository_files")
 load(":npm_translate_lock_helpers.bzl", "helpers")
@@ -42,6 +43,31 @@ RULES_JS_FROZEN_PNPM_LOCK_ENV = "ASPECT_RULES_JS_FROZEN_PNPM_LOCK"
 ################################################################################
 DEFAULT_REPOSITORIES_BZL_FILENAME = "repositories.bzl"
 DEFAULT_DEFS_BZL_FILENAME = "defs.bzl"
+
+def _normalize_exclude_package_contents(exclude_package_contents):
+    """Normalize exclude_package_contents dictionary for string_list_dict format."""
+    if not exclude_package_contents:
+        return {}
+
+    result = {}
+    for package, value in exclude_package_contents.items():
+        if type(value) == "bool":
+            if value == True:
+                # True means use default exclusions
+                result[package] = exclude_package_contents_default
+            else:
+                # False means no exclusions
+                result[package] = []
+        elif type(value) == "list":
+            # Lists must contain only strings
+            for item in value:
+                if type(item) != "string":
+                    fail("exclude_package_contents list values must be strings. Got: {} in package '{}'".format(type(item), package))
+            result[package] = value
+        else:
+            fail("exclude_package_contents values must be boolean or string list. Got: {} for package '{}'".format(type(value), package))
+
+    return result
 
 _ATTRS = {
     "additional_file_contents": attr.string_list_dict(),
@@ -65,8 +91,10 @@ _ATTRS = {
     "npm_package_target_name": attr.string(),
     "npmrc": attr.label(),
     "package_visibility": attr.string_list_dict(),
+    "patch_tool": attr.label(),
     "patch_args": attr.string_list_dict(),
     "patches": attr.string_list_dict(),
+    "exclude_package_contents": attr.string_list_dict(),
     "use_pnpm": attr.label(default = "@pnpm//:package/bin/pnpm.cjs"),  # bzlmod pnpm extension
     "pnpm_lock": attr.label(),
     "preupdate": attr.label_list(),
@@ -97,6 +125,9 @@ def _npm_translate_lock_impl(rctx):
     # import` in the user's repository
     if not rctx.attr.pnpm_lock:
         _bootstrap_import(rctx, state)
+
+    if rctx.attr.pnpm_lock and hasattr(rctx, "watch"):
+        rctx.watch(rctx.attr.pnpm_lock)
 
     if state.should_update_pnpm_lock():
         # Run `pnpm install --lockfile-only` or `pnpm import` if its inputs have changed since last update
@@ -161,6 +192,8 @@ def npm_translate_lock(
         use_home_npmrc = None,
         data = [],
         patches = {},
+        exclude_package_contents = {},
+        patch_tool = None,
         patch_args = {"*": ["-p0"]},
         custom_postinstalls = {},
         package_visibility = {},
@@ -276,6 +309,29 @@ def npm_translate_lock(
             These patches are applied after any patches in [pnpm.patchedDependencies](https://pnpm.io/next/package_json#pnpmpatcheddependencies).
 
             Read more: [patching](/docs/pnpm.md#patching)
+
+        exclude_package_contents: Configuration for excluding package contents (WORKSPACE only).
+
+            For MODULE.bazel, use the `exclude_package_contents` tag class instead.
+
+            The configuration is a dictionary that maps package names (or package names with their version, e.g., "my-package" or "my-package@v1.2.3") to exclusion rules.
+
+            Values can be:
+            - `True`: Use default exclusions
+            - List of strings: Multiple exclusion patterns
+
+            Versions must match if used.
+
+            Example:
+
+            ```
+            exclude_package_contents = {
+                "*": True,  # Use defaults for all packages
+                "@foo/bar": ["**/test/**"],
+                "@foo/car@2.0.0": ["**/README*"],
+            }
+            ```
+        patch_tool: The patch tool to use. If not specified, the `patch` from `PATH` is used.
 
         patch_args: A map of package names or package names with their version (e.g., "my-package" or "my-package@v1.2.3")
             to a label list arguments to pass to the patch tool. The most specific match wins.
@@ -569,6 +625,8 @@ def npm_translate_lock(
         npmrc = npmrc,
         use_home_npmrc = use_home_npmrc,
         patches = patches,
+        exclude_package_contents = _normalize_exclude_package_contents(exclude_package_contents),
+        patch_tool = patch_tool,
         patch_args = patch_args,
         custom_postinstalls = custom_postinstalls,
         package_visibility = package_visibility,
@@ -576,7 +634,7 @@ def npm_translate_lock(
         public_hoist_packages = public_hoist_packages,
         dev = dev,
         no_optional = no_optional,
-        lifecycle_hooks = lifecycle_hooks,
+        lifecycle_hooks = lifecycle_hooks if lifecycle_hooks else {},
         lifecycle_hooks_envs = lifecycle_hooks_envs,
         lifecycle_hooks_execution_requirements = lifecycle_hooks_execution_requirements,
         lifecycle_hooks_use_default_shell_env = lifecycle_hooks_use_default_shell_env,
@@ -601,7 +659,7 @@ def npm_translate_lock(
         bzlmod = False,
     )
 
-def list_patches(name, out = None, include_patterns = ["*.diff", "*.patch"], exclude_patterns = []):
+def list_patches(name, out = None, include_patterns = ["*.diff", "*.patch"], exclude_package_contents = []):
     """Write a file containing a list of all patches in the current folder to the source tree.
 
     Use this together with the `verify_patches` attribute of `npm_translate_lock` to verify
@@ -612,17 +670,17 @@ def list_patches(name, out = None, include_patterns = ["*.diff", "*.patch"], exc
         name: Name of the target
         out: Name of file to write to the source tree. If unspecified, `name` is used
         include_patterns: Patterns to pass to a glob of patch files
-        exclude_patterns: Patterns to ignore in a glob of patch files
+        exclude_package_contents: Patterns to ignore in a glob of patch files
     """
     outfile = out if out else name
 
     # Ignore the patch list file we generate
-    exclude_patterns = exclude_patterns[:]
-    exclude_patterns.append(outfile)
+    exclude_package_contents = exclude_package_contents[:]
+    exclude_package_contents.append(outfile)
 
     list_sources(
         name = "%s_list" % name,
-        srcs = native.glob(include_patterns, exclude = exclude_patterns),
+        srcs = native.glob(include_patterns, exclude = exclude_package_contents),
     )
 
     write_source_file(
@@ -820,15 +878,20 @@ INFO: {} file has changed""".format(pnpm_lock_relative_path))
 
 ################################################################################
 def _fail_if_frozen_pnpm_lock(rctx, state):
+    repo_reference_symbol = "@"
+    if rctx.attr.bzlmod:
+        repo_reference_symbol = "@@"
+
     if RULES_JS_FROZEN_PNPM_LOCK_ENV in rctx.os.environ.keys() and rctx.os.environ[RULES_JS_FROZEN_PNPM_LOCK_ENV]:
         fail("""
 
 ERROR: `{action_cache}` is out of date. `{pnpm_lock}` may require an update. To update run,
 
-           bazel run @{rctx_name}//:sync
+           bazel run {repo_reference_symbol}{rctx_name}//:sync
 
 """.format(
             action_cache = state.label_store.relative_path("action_cache"),
             pnpm_lock = state.label_store.relative_path("pnpm_lock"),
+            repo_reference_symbol = repo_reference_symbol,
             rctx_name = rctx.name,
         ))

@@ -65,5 +65,48 @@ def test_verify_ignores_in_subdir(ctx):
 t0_test = unittest.make(test_verify_ignores_in_root)
 t1_test = unittest.make(test_verify_ignores_in_subdir)
 
+# buildifier: disable=function-docstring
+def test_verify_gather_package_content_works_with_simple_name(ctx):
+    env = unittest.begin(ctx)
+    actual = helpers_testonly.gather_package_content_excludes(
+        {
+            "packageA": ["pattern1", "pattern2"],
+        },
+        "packageA",
+    )
+    expected = ["pattern1", "pattern2"]
+    asserts.equals(env, expected, actual)
+    return unittest.end(env)
+
+# buildifier: disable=function-docstring
+def test_verify_gather_package_content_works_with_star_pattern(ctx):
+    env = unittest.begin(ctx)
+    actual = helpers_testonly.gather_package_content_excludes(
+        {
+            "*": ["pattern1", "pattern2"],
+        },
+        "packageA",
+    )
+    expected = ["pattern1", "pattern2"]
+    asserts.equals(env, expected, actual)
+    return unittest.end(env)
+
+# buildifier: disable=function-docstring
+def test_verify_gather_package_content_works_with_dict_format(ctx):
+    env = unittest.begin(ctx)
+    actual = helpers_testonly.gather_package_content_excludes(
+        {
+            "packageA": ["pattern1", "pattern2"],
+        },
+        "packageA",
+    )
+    expected = ["pattern1", "pattern2"]
+    asserts.equals(env, expected, actual)
+    return unittest.end(env)
+
+t2_test = unittest.make(test_verify_gather_package_content_works_with_simple_name)
+t3_test = unittest.make(test_verify_gather_package_content_works_with_star_pattern)
+t4_test = unittest.make(test_verify_gather_package_content_works_with_dict_format)
+
 def translate_lock_helpers_tests(name):
-    unittest.suite(name, t0_test, t1_test)
+    unittest.suite(name, t0_test, t1_test, t2_test, t3_test, t4_test)

@@ -10,18 +10,20 @@ PNPM_LOCK_VERSIONS = [
     "v60",
     "v61",
     "v90",
+    "v101",
 ]
 
 # Lockfiles with unique test cases
 PNPM_LOCK_TEST_CASES = [
-    "tarball-no-url-v54.yaml",
-    "override-with-alias-url-v9.yaml",
-    "isaacs-cliui-v90.yaml",
-    "docusaurus-direct-peer-v6.yaml",
-    "docusaurus-direct-peer-v9.yaml",
+    "tarball-no-url-v54",
+    "override-with-alias-url-v9",
+    "isaacs-cliui-v90",
+    "docusaurus-direct-peer-v6",
+    "docusaurus-direct-peer-v9",
+    "versionless-patch-v9",
 ]
 
-bazel_dep(name = "aspect_bazel_lib", version = "2.7.7")
+bazel_dep(name = "aspect_bazel_lib", version = "2.14.0")
 
 bazel_dep(name = "bazel_skylib", version = "1.5.0", dev_dependency = True)
 bazel_dep(name = "rules_nodejs", version = "6.3.0", dev_dependency = True)
@@ -71,8 +73,8 @@ npm = use_extension(
         "lock-%s__rollup__3.29.4__links" % version,
 
         # Dep only referenced via npm: should have the real package name in the repo name
-        "lock-%s__at_types_sizzle__2.3.8" % version,
-        "lock-%s__at_types_sizzle__2.3.8__links" % version,
+        "lock-%s__at_types_sizzle__2.3.9" % version,
+        "lock-%s__at_types_sizzle__2.3.9__links" % version,
 
         # Dep with peers
         "lock-%s__at_aspect-test_d__2.0.0_at_aspect-test_c_2.0.2" % version,
@@ -81,11 +83,14 @@ npm = use_extension(
         # Deep with many peers
         "lock-%s__at_rollup_plugin-typescript__8.2.1_%s" % (
             version,
-            "ommloj5qql5ba6x5wuiluawhoi" if version == "v54" else "1662662592" if version == "v90" else "1813138439",
+            "3vgsug3mjv7wvue74swjdxifxy" if version == "v54" else "626159424" if (version == "v90" or version == "v101") else "1813138439" if (version == "v61" or version == "v60") else "unknown",
         ),
 
         # Dep with patch
-        "lock-%s__meaning-of-life__1.0.0_o3deharooos255qt5xdujc3cuq" % version,
+        "lock-%s__meaning-of-life__1.0.0_%s" % (
+            version,
+            "1541309197" if version == "v101" else "o3deharooos255qt5xdujc3cuq",
+        ),
     )
     for version in PNPM_LOCK_VERSIONS
 ]
@@ -93,7 +98,7 @@ npm = use_extension(
 [
     npm.npm_translate_lock(
         name = lockfile.replace(".yaml", ""),
-        pnpm_lock = "//cases:%s" % lockfile,
+        pnpm_lock = "//cases/%s:pnpm-lock.yaml" % lockfile,
         verify_node_modules_ignored = "//:.bazelignore",
     )
     for lockfile in PNPM_LOCK_TEST_CASES

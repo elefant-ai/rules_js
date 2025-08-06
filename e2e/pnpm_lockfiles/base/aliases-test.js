@@ -5,6 +5,14 @@ if (require('@aspect-test/a') !== require('@aspect-test/a2')) {
     )
 }
 
+// Alias to a local package
+if (
+    require(`@scoped/a/package.json`) !==
+    require(`alias-project-a/package.json`)
+) {
+    throw new Error(`alias-project-a should be alias of @scoped/a`)
+}
+
 // Various other aliases with odd scoping
 for (const pkg of [
     '@aspect-test/a2',
@@ -51,3 +59,6 @@ require('@isaacs/cliui')
 
 // `alias-only-sizzle` aliases a package not declared elsewhere
 require('alias-only-sizzle/package.json')
+
+// lodash file: reference
+require('lodash')

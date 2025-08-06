@@ -24,7 +24,7 @@ https://github.com/npm/rfcs/blob/main/accepted/0042-isolated-mode.md.
 
 _ATTRS = {
     "src": attr.label(
-        doc = """A npm_package target or or any other target that provides a NpmPackageInfo.
+        doc = """A target providing a `NpmPackageInfo` or `JsInfo` containing the package sources.
         """,
         mandatory = True,
     ),
@@ -107,18 +107,25 @@ _ATTRS = {
         """,
         providers = [NpmPackageStoreInfo, JsInfo],
     ),
+    "exclude_package_contents": attr.string_list(
+        doc = """List of exclude patterns to exclude files from the package store.
+
+        The exclude patterns are relative to the package store directory.
+        """,
+        default = [],
+    ),
     "package": attr.string(
         doc = """The package name to link to.
 
-If unset, the package name in the NpmPackageInfo src must be set.
-If set, takes precendance over the package name in the NpmPackageInfo src.
+If unset, the package name in the `NpmPackageInfo` src must be set.
+If set, takes precendance over the package name in the `NpmPackageInfo` src.
 """,
     ),
     "version": attr.string(
         doc = """The package version being linked.
 
-If unset, the package version in the NpmPackageInfo src must be set.
-If set, takes precendance over the package version in the NpmPackageInfo src.
+If unset, the package version in the `NpmPackageInfo` src must be set.
+If set, takes precendance over the package version in the `NpmPackageInfo` src.
 """,
     ),
     "dev": attr.bool(
@@ -201,10 +208,10 @@ def _npm_package_store_impl(ctx):
         npm_pkg_info = ctx.attr.src[NpmPackageInfo]
 
         # output the package as a TreeArtifact to its package store location
-        if ctx.label.workspace_name and ctx.label.package:
-            expected_short_path = "../{}/{}/{}".format(ctx.label.workspace_name, ctx.label.package, package_store_directory_path)
-        elif ctx.label.workspace_name:
-            expected_short_path = "../{}/{}".format(ctx.label.workspace_name, package_store_directory_path)
+        if ctx.label.repo_name and ctx.label.package:
+            expected_short_path = "../{}/{}/{}".format(ctx.label.repo_name, ctx.label.package, package_store_directory_path)
+        elif ctx.label.repo_name:
+            expected_short_path = "../{}/{}".format(ctx.label.repo_name, package_store_directory_path)
         elif ctx.label.package:
             expected_short_path = "{}/{}".format(ctx.label.package, package_store_directory_path)
         else:
@@ -223,7 +230,15 @@ def _npm_package_store_impl(ctx):
                 # tar to strip one directory level. Some packages have directory permissions missing
                 # executable which make the directories not listable (pngjs@5.0.0 for example).
                 bsdtar = ctx.toolchains["@aspect_bazel_lib//lib:tar_toolchain_type"]
-                
+
+                tar_exclude_package_contents = []
+                if ctx.attr.exclude_package_contents:
+                    for pattern in ctx.attr.exclude_package_contents:
+                        if pattern == "":
+                            continue
+                        tar_exclude_package_contents.append("--exclude")
+                        tar_exclude_package_contents.append(pattern)
+
                 # Hacky way to detect Windows, but it works
                 if bsdtar.tarinfo.binary.path[-4:] == ".exe":
                     bsdtar_path = "bsdtar"
@@ -237,6 +252,7 @@ def _npm_package_store_impl(ctx):
                     outputs = [package_store_directory],
                     arguments = [
                         "--extract",
+                    ] + tar_exclude_package_contents + [
                         "--no-same-owner",
                         "--no-same-permissions",
                         "--strip-components",
@@ -248,6 +264,10 @@ def _npm_package_store_impl(ctx):
                     ],
                     mnemonic = "NpmPackageExtract",
                     progress_message = "Extracting npm package {}@{}".format(package, version),
+
+                    # Always override the locale to give better hermeticity.
+                    # See https://github.com/aspect-build/rules_js/issues/2039
+                    env = getattr(bsdtar.tarinfo, "default_env", {}),
                 )
             else:
                 copy_directory_bin_action(
@@ -303,18 +323,18 @@ deps of npm_package_store must be in the same package.""" % (ctx.label.package, 
         jsinfo = ctx.attr.src[JsInfo]
 
         # Symlink to the directory of the target that created this JsInfo
-        if ctx.label.workspace_name and ctx.label.package:
-            symlink_path = "external/{}/{}/{}".format(ctx.label.workspace_name, ctx.label.package, package_store_directory_path)
-        elif ctx.label.workspace_name:
-            symlink_path = "external/{}/{}".format(ctx.label.workspace_name, package_store_directory_path)
+        if ctx.label.repo_name and ctx.label.package:
+            symlink_path = "external/{}/{}/{}".format(ctx.label.repo_name, ctx.label.package, package_store_directory_path)
+        elif ctx.label.repo_name:
+            symlink_path = "external/{}/{}".format(ctx.label.repo_name, package_store_directory_path)
         else:
             symlink_path = package_store_directory_path
 
         # The package JsInfo including all direct and transitive sources, store info etc.
         js_infos.append(jsinfo)
 
-        if jsinfo.target.workspace_name:
-            target_path = "{}/external/{}/{}".format(ctx.bin_dir.path, jsinfo.target.workspace_name, jsinfo.target.package)
+        if jsinfo.target.repo_name:
+            target_path = "{}/external/{}/{}".format(ctx.bin_dir.path, jsinfo.target.repo_name, jsinfo.target.package)
         else:
             target_path = "{}/{}".format(ctx.bin_dir.path, jsinfo.target.package)
         package_store_directory = utils.make_symlink(ctx, symlink_path, target_path)
@@ -414,6 +434,12 @@ deps of npm_package_store must be in the same package.""" % (ctx.label.package, 
             dev = ctx.attr.dev,
         ),
     ]
+
+    if ctx.attr.src:
+        providers.append(DefaultInfo(
+            runfiles = ctx.attr.src[DefaultInfo].default_runfiles,
+        ))
+
     if package_store_directory and package_store_directory.is_directory:
         # Provide an output group that provides a single file which is the
         # package directory for use in $(execpath) and $(rootpath).
@@ -439,3 +465,32 @@ npm_package_store = rule(
     provides = npm_package_store_lib.provides,
     toolchains = npm_package_store_lib.toolchains,
 )
+
+# Invoked by generated package store targets for local packages
+# buildifier: disable=function-docstring
+# buildifier: disable=unnamed-macro
+def npm_local_package_store_internal(link_root_name, package_store_name, package, version, src, deps, visibility, tags):
+    store_target_name = "%s/%s/%s" % (utils.package_store_root, link_root_name, package_store_name)
+
+    npm_package_store(
+        name = store_target_name,
+        src = src,
+        package = package,
+        version = version,
+        deps = deps,
+        visibility = visibility,
+        tags = tags,
+    )
+
+    # Create aliases for the standard /ref and /pkg targets so local packages can be
+    # references in the same way as remote packages.
+    native.alias(
+        name = "{}/ref".format(store_target_name),
+        actual = store_target_name,
+        visibility = visibility,
+    )
+    native.alias(
+        name = "{}/pkg".format(store_target_name),
+        actual = store_target_name,
+        visibility = visibility,
+    )

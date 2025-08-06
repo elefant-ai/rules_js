@@ -48,6 +48,23 @@ Check the public_hoist_packages attribute for duplicates.
                 fail(msg)
 
 ################################################################################
+def _gather_package_content_excludes(config, *names):
+    found = False
+    excludes = []
+
+    for name in names:
+        if name in config:
+            found = True
+            value = config[name]
+            excludes.extend(value)
+
+    if not found and "*" in config:
+        value = config["*"]
+        excludes.extend(value)
+
+    return None if len(excludes) == 0 else excludes
+
+################################################################################
 def _gather_values_from_matching_names(additive, keyed_lists, *names):
     keys = []
     result = []
@@ -236,7 +253,7 @@ def _select_npm_auth(url, npm_auth):
     return npm_auth_bearer, npm_auth_basic, npm_auth_username, npm_auth_password
 
 ################################################################################
-def _get_npm_imports(importers, packages, patched_dependencies, only_built_dependencies, root_package, rctx_name, attr, all_lifecycle_hooks, all_lifecycle_hooks_execution_requirements, all_lifecycle_hooks_use_default_shell_env, registries, default_registry, npm_auth):
+def _get_npm_imports(importers, packages, patched_dependencies, only_built_dependencies, root_package, rctx_name, attr, all_lifecycle_hooks, all_lifecycle_hooks_execution_requirements, all_lifecycle_hooks_use_default_shell_env, registries, default_registry, npm_auth, exclude_package_contents_config = None):
     "Converts packages from the lockfile to a struct of attributes for npm_import"
     if attr.prod and attr.dev:
         fail("prod and dev attributes cannot both be set to true")
@@ -277,7 +294,7 @@ def _get_npm_imports(importers, packages, patched_dependencies, only_built_depen
         friendly_version = package_info.get("friendly_version")
         deps = package_info.get("dependencies")
         optional_deps = package_info.get("optional_dependencies")
-        dev = package_info.get("dev")
+        dev_only = package_info.get("dev_only")
         optional = package_info.get("optional")
         requires_build = package_info.get("requires_build")
         transitive_closure = package_info.get("transitive_closure")
@@ -302,12 +319,14 @@ def _get_npm_imports(importers, packages, patched_dependencies, only_built_depen
             msg = "expected package {} resolution to have an integrity or tarball field but found none".format(package_key)
             fail(msg)
 
-        if attr.prod and dev:
-            # when prod attribute is set, skip devDependencies
+        if attr.prod and dev_only:
+            # When prod attribute is set, skip deps explicitly marked as dev in the lockfile.
+            #
+            # NOTE: this only excludes packages explicitly marked as dev-only in the lockfile
+            # to avoid further processing. Some packages may be used as both dev and non-dev within
+            # the workspace and therefor will not be marked as dev in the lockfile.
             continue
-        if attr.dev and not dev:
-            # when dev attribute is set, skip (non-dev) dependencies
-            continue
+
         if attr.no_optional and optional:
             # when no_optional attribute is set, skip optionalDependencies
             continue
@@ -327,7 +346,7 @@ def _get_npm_imports(importers, packages, patched_dependencies, only_built_depen
 
         translate_patches, patches_keys = _gather_values_from_matching_names(True, attr.patches, name, friendly_name, unfriendly_name)
 
-        pnpm_patch = patched_dependencies.get(friendly_name, {}).get("path", None)
+        pnpm_patch = patched_dependencies.get(friendly_name, patched_dependencies.get(name, None))
         pnpm_patched = pnpm_patch != None
 
         if len(translate_patches) > 0 and pnpm_patched:
@@ -340,7 +359,7 @@ ERROR: can not apply both `pnpm.patchedDependencies` and `npm_translate_lock(pat
 
         # Apply patch from `pnpm.patchedDependencies` first
         if pnpm_patched:
-            patch_path = "//%s:%s" % (attr.pnpm_lock.package, pnpm_patch)
+            patch_path = "//%s:%s" % (attr.pnpm_lock.package, pnpm_patch.get("path"))
             patches.append(patch_path)
 
             # pnpm patches are always applied with -p1
@@ -357,6 +376,14 @@ ERROR: can not apply both `pnpm.patchedDependencies` and `npm_translate_lock(pat
         # Prepend the optional '@' to patch labels in the root repository for earlier versions of Bazel so
         # that checked in repositories.bzl files don't fail diff tests when run under multiple versions of Bazel.
         patches = [("@" if patch.startswith("//") else "") + patch for patch in patches]
+
+        # gather exclude patterns
+        if exclude_package_contents_config != None:
+            # bzlmod mode: use provided configuration
+            exclude_package_contents = _gather_package_content_excludes(exclude_package_contents_config, name, friendly_name, unfriendly_name)
+        else:
+            # WORKSPACE mode: use attribute configuration
+            exclude_package_contents = _gather_package_content_excludes(attr.exclude_package_contents, name, friendly_name, unfriendly_name)
 
         # gather replace packages
         replace_packages, _ = _gather_values_from_matching_names(True, attr.replace_packages, name, friendly_name, unfriendly_name)
@@ -392,7 +419,7 @@ ERROR: can not apply both `pnpm.patchedDependencies` and `npm_translate_lock(pat
             elif name not in link_packages[public_hoist_package]:
                 link_packages[public_hoist_package].append(name)
 
-        run_lifecycle_hooks = name in only_built_dependencies if only_built_dependencies != None else requires_build
+        run_lifecycle_hooks = all_lifecycle_hooks and (name in only_built_dependencies if only_built_dependencies != None else requires_build)
         if run_lifecycle_hooks:
             lifecycle_hooks, _ = _gather_values_from_matching_names(False, all_lifecycle_hooks, "*", name, friendly_name, unfriendly_name)
             lifecycle_hooks_env, _ = _gather_values_from_matching_names(True, attr.lifecycle_hooks_envs, "*", name, friendly_name, unfriendly_name)
@@ -447,8 +474,10 @@ ERROR: can not apply both `pnpm.patchedDependencies` and `npm_translate_lock(pat
             name = repo_name,
             package = name,
             package_visibility = package_visibility,
+            patch_tool = attr.patch_tool,
             patch_args = patch_args,
             patches = patches,
+            exclude_package_contents = exclude_package_contents,
             root_package = root_package,
             lifecycle_hooks = lifecycle_hooks,
             lifecycle_hooks_env = lifecycle_hooks_env,
@@ -464,7 +493,7 @@ ERROR: can not apply both `pnpm.patchedDependencies` and `npm_translate_lock(pat
             version = version,
             bins = bins,
             package_info = package_info,
-            dev = dev,
+            dev = dev_only,
             replace_package = replace_package,
         )
 
@@ -529,11 +558,12 @@ pnpm install will create nested node_modules, but not all of them are ignored by
 We recommend that all node_modules folders in the source tree be ignored,
 to avoid Bazel printing confusing error messages.
 
-Either add line(s) to {bazelignore}:
+Possible fixes:
+  - Upgrade to Bazel 8.0 and use ignore_directories(["**/node_modules"]) in REPO.bazel
+  - Disable this check by removing `verify_node_modules_ignored` in `npm_translate_lock(name = "{repo}")`
+  - Add line(s) to {bazelignore}:
 
 {fixes}
-
-or disable this check by setting `verify_node_modules_ignored = None` in `npm_translate_lock(name = "{repo}")`
                 """.format(
                 fixes = "\n".join(missing_ignores),
                 bazelignore = rctx.attr.verify_node_modules_ignored,
@@ -641,4 +671,5 @@ helpers = struct(
 # exported for unit testing
 helpers_testonly = struct(
     find_missing_bazel_ignores = _find_missing_bazel_ignores,
+    gather_package_content_excludes = _gather_package_content_excludes,
 )

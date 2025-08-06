@@ -28,11 +28,11 @@ def npm_link_all_packages(name = "node_modules", imported_links = []):
             scope_targets[_scope].extend(_targets)
 
     if is_root:
-        store_0(name = "{}/chalk".format(name))
+        store_0(name)
     if link:
         if bazel_package == "":
-            link_0(name = "{}/chalk".format(name))
-            link_targets.append("//{}:{}/chalk".format(bazel_package, name))
+            link_0("{}/chalk".format(name), link_root_name = name, link_alias = "chalk")
+            link_targets.append(":{}/chalk".format(name))
 
     for scope, scoped_targets in scope_targets.items():
         _js_library(
@@ -58,5 +58,5 @@ def npm_link_targets(name = "node_modules", package = None):
 
     if link:
         if bazel_package == "":
-            link_targets.append("//{}:{}/chalk".format(bazel_package, name))
+            link_targets.append(":{}/chalk".format(name))
     return link_targets

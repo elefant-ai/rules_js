@@ -138,9 +138,26 @@ eslint_bin.eslint_test(
 > NB: We plan to add support for the `.npmrc` `public-hoist-pattern` setting to `rules_js` in a future release.
 > For now, you must emulate public-hoist-pattern in `rules_js` using the `public_hoist_packages` attribute shown above.
 
+## Ugly stack traces
+
+Bazel's sandboxing and runfiles directory layouts can make stack traces and logs hard to read. This issue is common in many
+languages when used within bazel, not only JavaScript.
+
+One solution involving `Error.prepareStackTrace` was [suggested on bazelbuild slack](https://bazelbuild.slack.com/archives/CA31HN1T3/p1733518986229749?thread_ts=1733516180.969159&cid=CA31HN1T3) by [John Firebaugh](https://github.com/jfirebaugh). This overrides `Error.prepareStackTrace` to strip the bazel sandbox and runfiles paths from error stack traces. This also uses [`source-map-support`](https://www.npmjs.com/package/source-map-support) to also apply source maps to the stack traces.
+
+See [examples/stack_traces](../examples/stack_traces) for a working example.
+
 ## Performance
 
 For general bazel performance tips see the [Aspect bazelrc guide](https://docs.aspect.build/guides/bazelrc/#performance-options).
+
+### Linking first-party packages
+
+When linking first-party packages it is recommended to use `js_library` or another `JsInfo`-providing rule to represent the package instead of the `npm_package` rule (which provides `NpmPackageInfo`).
+
+The use of `NpmPackageInfo` requires building the full package content in order to output a single directory artifact representing the package.
+
+Using `JsInfo` allows rules_js to passthru the provider without collecting the package content until another action requests it. For example `JsInfo.types`, normally outputted by a slow `.d.ts` producing tool such as `tsc`, is most likely unnecessary when only executing or bundling JavaScript files from `JsInfo.sources`. If `JsInfo.types` is produced by different actions then `JsInfo.sources` then those actions may not be required at all.
 
 ### Parallelism (build, test)
 
@@ -152,6 +169,35 @@ For example, the [default WebPack configuration](https://webpack.js.org/configur
 This can lead to builds performing slower due to IO throttling, or even failing if running in a virtualized environment where IO throughput is limited.
 
 If you are experiencing slower than expected builds, you can try disabling or reducing parallelism for the tools you are using.
+
+### Unnecessary npm package content
+
+Npm packages sometimes include unnecessary files such as tests, test data etc. Large files or a large number of files
+can effect performance and are sometimes worth explicitly excluding content.
+
+In these cases you can add such packages and the respective files/folders you want to exclude.
+
+**For WORKSPACE builds:**
+```starlark
+npm_translate_lock(
+    ...
+    exclude_package_contents = {
+        "resolve": ["**/test/*"],
+    },
+)
+```
+
+**For Bzlmod builds (MODULE.bazel):**
+```starlark
+npm.npm_exclude_package_contents(
+    package = "resolve",
+    patterns = ["**/test/*"],
+)
+```
+
+These examples will remove the test folder from the "resolve" package.
+
+You can use this to remove whatever you find to be not needed for your project.
 
 #### Jest
 

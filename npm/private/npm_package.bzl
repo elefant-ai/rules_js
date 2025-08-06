@@ -195,8 +195,6 @@ def npm_package(
 
     The two `include*_types` options may cause type-check actions to run, which slows down your
     development round-trip.
-    You can pass the Bazel option `--@aspect_rules_js//npm:exclude_types_from_npm_packages`
-    to override these two attributes for an individual `bazel` invocation, avoiding the type-check.
 
     As of rules_js 2.0, the recommended solution for avoiding eager type-checking when linking
     1p deps is to link `js_library` or any `JsInfo` producing targets directly without the
@@ -454,7 +452,7 @@ def npm_package(
             name = "{}.publish".format(name),
             entry_point = Label("@aspect_rules_js//npm/private:npm_publish_mjs"),
             fixed_args = [
-                "$(rootpath :{})".format(name),
+                "./$(rootpath :{})".format(name),
             ],
             data = [name],
             # required to make npm to be available in PATH

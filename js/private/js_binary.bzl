@@ -376,7 +376,7 @@ def _bash_launcher(ctx, nodeinfo, entry_point_path, log_prefix_rule_set, log_pre
         "JS_BINARY__PACKAGE": ctx.label.package,
         "JS_BINARY__TARGET_NAME": ctx.label.name,
         "JS_BINARY__TARGET": "{}//{}:{}".format(
-            "@" + ctx.label.workspace_name if ctx.label.workspace_name else "",
+            "@" + ctx.label.repo_name if ctx.label.repo_name else "",
             ctx.label.package,
             ctx.label.name,
         ),
@@ -573,19 +573,29 @@ def _js_binary_impl(ctx):
     runfiles = launcher.runfiles
 
     providers = []
+    if hasattr(ctx.attr, "env_inherit"):
+        providers.append(
+            RunEnvironmentInfo(
+                inherited_environment = ctx.attr.env_inherit,
+            ),
+        )
 
     if ctx.attr.testonly and ctx.configuration.coverage_enabled:
-        # We have to instruct rule implementers to have this attribute present.
-        if not hasattr(ctx.attr, "_lcov_merger"):
-            fail("_lcov_merger attribute is missing and coverage was requested")
-
         # We have to propagate _lcov_merger runfiles since bazel does not treat _lcov_merger as a proper tool.
         # See: https://github.com/bazelbuild/bazel/issues/4033
-        runfiles = runfiles.merge(ctx.attr._lcov_merger[DefaultInfo].default_runfiles)
+        # This is optional because:
+        # - We do not want to require it for js_binary targets
+        #   (but we cannot distinguish js_binary from js_test here, see #2229).
+        # - It is not required anymore on bazel 8
+        #   (https://github.com/bazelbuild/bazel/issues/4033#issuecomment-2507162290)
+        # TODO: Remove once bazel<8 support is dropped.
+        if hasattr(ctx.attr, "_lcov_merger"):
+            runfiles = runfiles.merge(ctx.attr._lcov_merger[DefaultInfo].default_runfiles)
         providers = [
             coverage_common.instrumented_files_info(
                 ctx,
                 source_attributes = ["data"],
+                dependency_attributes = ["data"],
                 # TODO: check if there is more extensions
                 # TODO: .ts should not be here since we ought to only instrument transpiled files?
                 extensions = [
@@ -651,6 +661,12 @@ See the Bazel [Test encyclopedia](https://bazel.build/reference/test-encyclopedi
 the contract between Bazel and a test runner.""",
     implementation = js_binary_lib.implementation,
     attrs = dict(js_binary_lib.attrs, **{
+        "env_inherit": attr.string_list(
+            default = [],
+            doc = "Specifies additional environment variables to inherit from the external environment when the test is executed by bazel test.",
+        ),
+        # TODO: Remove once bazel<8 support is dropped.
+        # See comment at usage site in the rule impl for more.
         "_lcov_merger": attr.label(
             executable = True,
             default = Label("//js/private/coverage:merger"),

@@ -1,10 +1,11 @@
 bazel-*
-.bazelrc.user
+user.bazelrc
 node_modules/
 .pnpm-*
 
 .idea/
 .ijwb/
+.bazelbsp/
 .vscode
 .DS_Store
 

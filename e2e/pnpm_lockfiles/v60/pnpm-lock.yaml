@@ -8,6 +8,7 @@ overrides:
   diff: https://github.com/kpdecker/jsdiff/archive/refs/tags/v5.2.0.tar.gz
   fsevents: ^2.3
   typescript: 5.5.2
+  '@types/glob': ^8.1.0
 
 patchedDependencies:
   meaning-of-life@1.0.0:
@@ -44,10 +45,13 @@ importers:
         version: link:../projects/b
       '@scoped/c':
         specifier: file:../projects/c
-        version: file:../projects/c
+        version: file:../projects/c(@scoped/b@projects+b)
       '@scoped/d':
         specifier: ../projects/d
         version: link:../projects/d
+      alias-project-a:
+        specifier: link:../projects/a
+        version: link:../projects/a
       aspect-test-a-no-scope:
         specifier: npm:@aspect-test/a
         version: /@aspect-test/a@5.0.2
@@ -78,12 +82,18 @@ importers:
       is-odd-v3:
         specifier: npm:is-odd@3.0.0
         version: /is-odd@3.0.0
+      jquery-git-ssh-399b201:
+        specifier: git+ssh://git@github.com:jquery/jquery#399b201bb3143a3952894cf3489b4848fc003967
+        version: github.com/jquery/jquery/399b201bb3143a3952894cf3489b4848fc003967
       jquery-git-ssh-e61fccb:
         specifier: git+ssh://git@github.com/jquery/jquery.git#e61fccb9d736235b4b011f89cba6866bc0b8997d
         version: github.com/jquery/jquery/e61fccb9d736235b4b011f89cba6866bc0b8997d
       jsonify:
         specifier: https://github.com/aspect-build/test-packages/releases/download/0.0.0/@foo-jsonify-0.0.0.tgz
         version: '@github.com/aspect-build/test-packages/releases/download/0.0.0/@foo-jsonify-0.0.0.tgz'
+      lodash:
+        specifier: file:../vendored/lodash-4.17.21.tgz
+        version: file:../vendored/lodash-4.17.21.tgz
       meaning-of-life:
         specifier: 1.0.0
         version: 1.0.0(patch_hash=o3deharooos255qt5xdujc3cuq)
@@ -99,6 +109,15 @@ importers:
       scoped/bad:
         specifier: link:../projects/b
         version: link:../projects/b
+      test-c200-d200:
+        specifier: workspace:*
+        version: link:../projects/peers-combo-2
+      test-c201-d200:
+        specifier: workspace:*
+        version: link:../projects/peers-combo-1
+      test-peer-types:
+        specifier: ../projects/peer-types
+        version: link:../projects/peer-types
       tslib:
         specifier: ^2.6.3
         version: 2.6.3
@@ -112,6 +131,9 @@ importers:
       '@aspect-test/c':
         specifier: 2.0.0
         version: 2.0.0
+      '@aspect-test/h-is-only-optional':
+        specifier: npm:@aspect-test/h@1.0.0
+        version: /@aspect-test/h@1.0.0
     devDependencies:
       '@aspect-test/b':
         specifier: 5.0.2
@@ -123,31 +145,86 @@ importers:
         specifier: 16.18.11
         version: registry.npmjs.org/@types/node@16.18.11
       alias-only-sizzle:
-        specifier: npm:@types/sizzle@~2.3.8
-        version: registry.npmjs.org/@types/sizzle@2.3.8
+        specifier: npm:@types/sizzle@~2.3.9
+        version: registry.npmjs.org/@types/sizzle@2.3.9
       alias-types-node:
         specifier: npm:@types/node@~16.18.11
         version: registry.npmjs.org/@types/node@16.18.11
 
   ../projects/a: {}
 
+  ../projects/a-types:
+    dependencies:
+      '@types/node':
+        specifier: 16.18.11
+        version: registry.npmjs.org/@types/node@16.18.11
+
   ../projects/b:
     dependencies:
       '@scoped/a':
         specifier: workspace:*
         version: link:../a
+    devDependencies:
+      '@types/node':
+        specifier: 16.18.11
+        version: registry.npmjs.org/@types/node@16.18.11
+      a-types:
+        specifier: workspace:*
+        version: link:../a-types
 
   ../projects/c:
     dependencies:
       '@scoped/a':
         specifier: link:../a
         version: link:../a
+      '@scoped/b':
+        specifier: workspace:*
+        version: link:../b
 
   ../projects/d:
     dependencies:
       '@scoped/a':
         specifier: workspace:*
         version: link:../a
+      '@scoped/b':
+        specifier: workspace:*
+        version: link:../b
+
+  ../projects/peer-types:
+    devDependencies:
+      '@scoped/a':
+        specifier: workspace:*
+        version: link:../a
+      '@scoped/b':
+        specifier: link:../b
+        version: link:../b
+      '@scoped/c':
+        specifier: file:../c
+        version: file:../projects/c(@scoped/b@projects+b)
+      hello:
+        specifier: https://gitpkg.vercel.app/EqualMa/gitpkg-hello/packages/hello
+        version: '@gitpkg.vercel.app/EqualMa/gitpkg-hello/packages/hello'
+      jsonify:
+        specifier: https://github.com/aspect-build/test-packages/releases/download/0.0.0/@foo-jsonify-0.0.0.tgz
+        version: '@github.com/aspect-build/test-packages/releases/download/0.0.0/@foo-jsonify-0.0.0.tgz'
+
+  ../projects/peers-combo-1:
+    dependencies:
+      '@aspect-test/c':
+        specifier: 2.0.1
+        version: 2.0.1
+      '@aspect-test/d':
+        specifier: 2.0.0
+        version: 2.0.0(@aspect-test/c@2.0.1)
+
+  ../projects/peers-combo-2:
+    dependencies:
+      '@aspect-test/c':
+        specifier: 2.0.0
+        version: 2.0.0
+      '@aspect-test/d':
+        specifier: 2.0.0
+        version: 2.0.0(@aspect-test/c@2.0.0)
 
   ../vendored/is-number: {}
 
@@ -174,12 +251,35 @@ packages:
     hasBin: true
     requiresBuild: true
     dev: false
-    optional: true
+
+  /@aspect-test/c@2.0.1:
+    resolution: {integrity: sha512-pyetgkZm4yfHYJYFaIi0rXM2VeR9qGw+gukEkrUO7LXuDIfkuvQd5TDduwIYIVvXGRjHKKjCa2BaA153nZfFyQ==}
+    hasBin: true
+    requiresBuild: true
+    dev: false
 
   /@aspect-test/c@2.0.2:
     resolution: {integrity: sha512-rMJmd3YBvY7y0jh+2m72TiAhe6dVKjMMNFFVOXFCbM233m7lsG4cq970H1C8rUsc3AcA5E/cEHlxSVffHlHD2Q==}
     hasBin: true
     requiresBuild: true
+
+  /@aspect-test/d@2.0.0(@aspect-test/c@2.0.0):
+    resolution: {integrity: sha512-jndwr8pLUfn795uApTcXG/yZ5hV2At1aS/wo5BVLxqlVVgLoOETF/Dp4QOjMHE/SXkXFowz6Hao+WpmzVvAO0A==}
+    hasBin: true
+    peerDependencies:
+      '@aspect-test/c': x.x.x
+    dependencies:
+      '@aspect-test/c': 2.0.0
+    dev: false
+
+  /@aspect-test/d@2.0.0(@aspect-test/c@2.0.1):
+    resolution: {integrity: sha512-jndwr8pLUfn795uApTcXG/yZ5hV2At1aS/wo5BVLxqlVVgLoOETF/Dp4QOjMHE/SXkXFowz6Hao+WpmzVvAO0A==}
+    hasBin: true
+    peerDependencies:
+      '@aspect-test/c': x.x.x
+    dependencies:
+      '@aspect-test/c': 2.0.1
+    dev: false
 
   /@aspect-test/d@2.0.0(@aspect-test/c@2.0.2):
     resolution: {integrity: sha512-jndwr8pLUfn795uApTcXG/yZ5hV2At1aS/wo5BVLxqlVVgLoOETF/Dp4QOjMHE/SXkXFowz6Hao+WpmzVvAO0A==}
@@ -193,6 +293,12 @@ packages:
     resolution: {integrity: sha512-GyAxHYKN650db+xnimHnL2LPz65ilmQsVhCasWA7drDNQn/rfmPiEVMzjRiS7m46scXIERaBmiJMzYDf0bIUbA==}
     hasBin: true
     dev: false
+
+  /@aspect-test/h@1.0.0:
+    resolution: {integrity: sha512-U1LStvh2QPmdQN7rlR0PTZZ1btTTcjiHxVmq5SvTxIRgIaJMCIsxcS5ghrd71H/JIwnJOmhI7BEQN3n6Hq9WSw==}
+    hasBin: true
+    dev: false
+    optional: true
 
   /@isaacs/cliui@8.0.2:
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -215,7 +321,7 @@ packages:
       typescript: '>=3.7.0'
     dependencies:
       '@rollup/pluginutils': 3.1.0(rollup@3.29.4)
-      resolve: 1.22.8
+      resolve: 1.22.10
       rollup: 3.29.4
       tslib: 2.6.3
       typescript: 5.5.2
@@ -238,8 +344,8 @@ packages:
     engines: {node: '>=8'}
     dev: false
 
-  /ansi-regex@6.0.1:
-    resolution: {integrity: sha512-n5M855fKb2SsfMIiFFoVrABHJC8QtHwVx+mHWP3QcEqBHYienj5dHSgjbxtC0WEZXYt4wcD6zrQElDPhFuZgfA==}
+  /ansi-regex@6.1.0:
+    resolution: {integrity: sha512-7HSX4QQb4CspciLpVFwyRe79O3xsIZDDLER21kERQ71oaPodF8jL725AgJMFAYbooIqolJoRLuM81SpeUkpkvA==}
     engines: {node: '>=12'}
     dev: false
 
@@ -305,8 +411,8 @@ packages:
       function-bind: 1.1.2
     dev: false
 
-  /is-core-module@2.15.0:
-    resolution: {integrity: sha512-Dd+Lb2/zvk9SKy1TGCt1wFJFo/MWBPMX5x7KcvLajWTGuomczdQX61PvY5yK6SVACwpoexWo81IfFyoKY2QnTA==}
+  /is-core-module@2.16.1:
+    resolution: {integrity: sha512-UfoeMA6fIJ8wTYFEUjelnaGI67v6+N7qXJEvQuIGa99l4xsCruSYOVSQ0uPANn4dAzm8lkYPaKLrrijLq7x23w==}
     engines: {node: '>= 0.4'}
     dependencies:
       hasown: 2.0.2
@@ -380,11 +486,12 @@ packages:
     engines: {node: '>=8.6'}
     dev: false
 
-  /resolve@1.22.8:
-    resolution: {integrity: sha512-oKWePCxqpd6FlLvGV1VU0x7bkPmmCNolxzjMf4NczoDnQcIWrAF+cPtZn5i6n+RfD2d9i0tzpKnG6Yk168yIyw==}
+  /resolve@1.22.10:
+    resolution: {integrity: sha512-NPRy+/ncIMeDlTAsuqwKIiferiawhefFJtkNSW0qZJEqMEb+qBt/77B/jGeeek+F0uOeN05CDa6HXbbIgtVX4w==}
+    engines: {node: '>= 0.4'}
     hasBin: true
     dependencies:
-      is-core-module: 2.15.0
+      is-core-module: 2.16.1
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
     dev: false
@@ -441,7 +548,7 @@ packages:
     resolution: {integrity: sha512-iq6eVVI64nQQTRYq2KtEg2d2uU7LElhTJwsH4YzIHZshxlgZms/wIc4VoDQTlG/IvVIrBKG06CrZnp0qv7hkcQ==}
     engines: {node: '>=12'}
     dependencies:
-      ansi-regex: 6.0.1
+      ansi-regex: 6.1.0
     dev: false
 
   /supports-preserve-symlinks-flag@1.0.0:
@@ -492,7 +599,6 @@ packages:
     resolution: {tarball: https://github.com/aspect-build/test-packages/releases/download/0.0.0/@foo-jsonify-0.0.0.tgz}
     name: '@foo/jsonify'
     version: 0.0.0
-    dev: false
 
   '@github.com/kpdecker/jsdiff/archive/refs/tags/v5.2.0.tar.gz':
     resolution: {tarball: https://github.com/kpdecker/jsdiff/archive/refs/tags/v5.2.0.tar.gz}
@@ -505,19 +611,33 @@ packages:
     resolution: {tarball: https://gitpkg.vercel.app/EqualMa/gitpkg-hello/packages/hello}
     name: hello
     version: 1.0.0
-    dev: false
 
-  file:../projects/c:
+  file:../projects/c(@scoped/b@projects+b):
     resolution: {directory: ../projects/c, type: directory}
+    id: file:../projects/c
     name: '@scoped/c'
+    peerDependencies:
+      '@scoped/b': workspace:*
     dependencies:
       '@scoped/a': link:../a
-    dev: false
+      '@scoped/b': link:../projects/b
 
   file:../vendored/is-number:
     resolution: {directory: ../vendored/is-number, type: directory}
     name: is-number
     version: 0.0.1
+    dev: false
+
+  file:../vendored/lodash-4.17.21.tgz:
+    resolution: {integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==, tarball: file:../vendored/lodash-4.17.21.tgz}
+    name: lodash
+    version: 4.17.21
+    dev: false
+
+  github.com/jquery/jquery/399b201bb3143a3952894cf3489b4848fc003967:
+    resolution: {tarball: https://codeload.github.com/jquery/jquery/tar.gz/399b201bb3143a3952894cf3489b4848fc003967}
+    name: jquery
+    version: 3.7.1-pre
     dev: false
 
   github.com/jquery/jquery/e61fccb9d736235b4b011f89cba6866bc0b8997d:
@@ -572,10 +692,9 @@ packages:
     resolution: {integrity: sha512-3oJbGBUWuS6ahSnEq1eN2XrCyf4YsWI8OyCvo7c64zQJNplk3mO84t53o8lfTk+2ji59g5ycfc6qQ3fdHliHuA==, registry: https://registry.yarnpkg.com/, tarball: https://registry.npmjs.org/@types/node/-/node-16.18.11.tgz}
     name: '@types/node'
     version: 16.18.11
-    dev: true
 
-  registry.npmjs.org/@types/sizzle@2.3.8:
-    resolution: {integrity: sha512-0vWLNK2D5MT9dg0iOo8GlKguPAU02QjmZitPEsXRuJXU/OGIOt9vT9Fc26wtYuavLxtO45v9PGleoL9Z0k1LHg==, registry: https://registry.yarnpkg.com/, tarball: https://registry.npmjs.org/@types/sizzle/-/sizzle-2.3.8.tgz}
+  registry.npmjs.org/@types/sizzle@2.3.9:
+    resolution: {integrity: sha512-xzLEyKB50yqCUPUJkIsrVvoWNfFUbIZI+RspLWt8u+tIW/BetMBZtgV2LY/2o+tYH8dRvQ+eoPf3NdhQCcLE2w==, registry: https://registry.yarnpkg.com/, tarball: https://registry.npmjs.org/@types/sizzle/-/sizzle-2.3.9.tgz}
     name: '@types/sizzle'
-    version: 2.3.8
+    version: 2.3.9
     dev: true
